@@ -1,0 +1,44 @@
+# Entorno virtual
+venv/
+.venv/
+env/
+
+# Archivos de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Bases de datos y Media
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+
+# Logs
+*.log
+
+# Archivos de configuración local (¡SEGURIDAD CRÍTICA!)
+.env
+.env.*
+config/local_settings.py
+
+# Firma Electrónica (¡SEGURIDAD CRÍTICA!)
+/secrets/
+*.p12
+*.jks
+
+# Archivos de IDE
+.idea/
+.vscode/
+*.swp
+
+# Archivos del sistema operativo y Temporales
+.DS_Store
+Thumbs.db
+modelos_actuales.txt
+
+# Scripts locales
+scripts/

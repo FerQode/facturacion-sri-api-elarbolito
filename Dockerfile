@@ -60,6 +60,5 @@ RUN mkdir -p /app/staticfiles /app/media && \
 USER appuser
 
 # 10. Comando de Arranque (Gunicorn)
-# --timeout 120: Para reportes PDF pesados
-# --workers 3: Recomendado para instancias standard
-CMD sh -c "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 3 --timeout 120"
+# Optimizaciones: exec form (lista), bind al 8000, maximo 2 workers por RAM
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120"]

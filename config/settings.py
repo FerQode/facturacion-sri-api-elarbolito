@@ -228,8 +228,12 @@ if DEBUG:
 else:
     CORS_ALLOW_ALL_ORIGINS = False
     CORS_ALLOWED_ORIGINS = get_env_list('CORS_ALLOWED_ORIGINS')
-    # HYBRID TESTING: Allow localhost explicitly for local frontend dev against prod backend
     CORS_ALLOWED_ORIGINS.extend(["http://localhost:4200", "http://127.0.0.1:4200"])
+    
+    # FIX: Confiar en el dominio dinámico de Railway para el Login CSRF
+    CSRF_TRUSTED_ORIGINS = get_env_list('CSRF_TRUSTED_URLS')
+    CSRF_TRUSTED_ORIGINS.extend(["http://localhost:4200"])
+
     CORS_ALLOW_CREDENTIALS = True
     # CORS Hardening
     from corsheaders.defaults import default_headers

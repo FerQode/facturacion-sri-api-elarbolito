@@ -56,9 +56,13 @@ RUN addgroup --system appgroup && adduser --system --group appuser
 RUN mkdir -p /app/staticfiles /app/media && \
     chown -R appuser:appgroup /app/
 
-# 9. Cambiar al usuario seguro
+# 9. Copiar y dar permisos al Entrypoint
+COPY docker-entrypoint.sh /app/
+USER root
+RUN chmod +x /app/docker-entrypoint.sh
 USER appuser
 
 # 10. Comando de Arranque (Gunicorn)
 # Optimizaciones: exec form (lista), bind al 8000, maximo 2 workers por RAM
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120"]

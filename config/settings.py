@@ -240,14 +240,27 @@ else:
 # ==============================================================================
 # 8. SRI & BUSINESS LOGIC
 # ==============================================================================
+SRI_FIRMA_PASS = os.getenv('SRI_FIRMA_PASS')
+SRI_FIRMA_BASE64 = os.getenv('SRI_FIRMA_BASE64')
+SRI_FIRMA_PATH = BASE_DIR / 'secrets' / 'el_arbolito.p12'
+SRI_EMISOR_RUC = os.getenv('SRI_EMISOR_RUC', '0591726951001')
+SRI_AMBIENTE = int(os.getenv('SRI_AMBIENTE', '1'))
+SRI_URL_RECEPCION = os.getenv('SRI_URL_RECEPCION')
+SRI_URL_AUTORIZACION = os.getenv('SRI_URL_AUTORIZACION')
+SRI_EMISOR_RAZON_SOCIAL = os.getenv('SRI_EMISOR_RAZON_SOCIAL', 'JUNTA DE RIEGO Y/O DRENAJE EL ARBOLITO')
+SRI_NOMBRE_COMERCIAL = os.getenv('SRI_NOMBRE_COMERCIAL', 'GESTION COMUNITARIA DEL AGUA DE EL ARBOLITO')
+SRI_SERIE_ESTABLECIMIENTO = os.getenv('SRI_SERIE_ESTABLECIMIENTO', '001')
+SRI_SERIE_PUNTO_EMISION = os.getenv('SRI_SERIE_PUNTO_EMISION', '001')
+SRI_EMISOR_DIRECCION_MATRIZ = os.getenv('SRI_EMISOR_DIRECCION_MATRIZ', 'COTOPAXI/PUJILI/PUJILI/ PRINCIPAL S/N')
+
 SRI_CONFIG = {
-    'FIRMA_PASS': os.getenv('SRI_FIRMA_PASS'),
-    'FIRMA_BASE64': os.getenv('SRI_FIRMA_BASE64'),
-    'FIRMA_PATH': BASE_DIR / 'secrets' / 'el_arbolito.p12',
-    'EMISOR_RUC': os.getenv('SRI_EMISOR_RUC'),
-    'AMBIENTE': int(os.getenv('SRI_AMBIENTE', '1')),
-    'URL_RECEPCION': os.getenv('SRI_URL_RECEPCION'),
-    'URL_AUTORIZACION': os.getenv('SRI_URL_AUTORIZACION'),
+    'FIRMA_PASS': SRI_FIRMA_PASS,
+    'FIRMA_BASE64': SRI_FIRMA_BASE64,
+    'FIRMA_PATH': SRI_FIRMA_PATH,
+    'EMISOR_RUC': SRI_EMISOR_RUC,
+    'AMBIENTE': SRI_AMBIENTE,
+    'URL_RECEPCION': SRI_URL_RECEPCION,
+    'URL_AUTORIZACION': SRI_URL_AUTORIZACION,
 }
 
 # ==============================================================================

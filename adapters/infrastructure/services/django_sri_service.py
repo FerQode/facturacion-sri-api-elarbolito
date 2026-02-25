@@ -202,6 +202,19 @@ class DjangoSRIService(ISRIService):
 
             # Detalles
             detalles = etree.SubElement(xml_factura, "detalles")
+            
+            # FIXED TARIFF FALLBACK (Acometidas sin medidor)
+            # El SRI exige mínimo 1 detalle. Si la factura llega sin detalles, creamos uno al vuelo.
+            if not factura.detalles:
+                from core.domain.factura import DetalleFactura
+                factura.detalles.append(DetalleFactura(
+                    id=None,
+                    concepto="Servicio de Agua Potable (Tarifa Fija sin Medidor)",
+                    cantidad=Decimal("1.00"),
+                    precio_unitario=factura.subtotal,
+                    subtotal=factura.subtotal
+                ))
+
             for i, detalle_entidad in enumerate(factura.detalles, 1):
                 detalle_xml = etree.SubElement(detalles, "detalle")
                 etree.SubElement(detalle_xml, "codigoPrincipal").text = str(i)

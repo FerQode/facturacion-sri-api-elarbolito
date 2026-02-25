@@ -172,6 +172,19 @@ class FacturacionService:
 
                 from django.db import IntegrityError
 
+                # --- NUEVA VALIDACIÓN PARA SERVICIOS FIJOS (Sin medidor) ---
+                if not id_lectura_db:
+                    ya_facturado = FacturaModel.objects.filter(
+                        socio_id=item.get('socio_id'),
+                        lectura_id__isnull=True,
+                        anio=ahora.year,
+                        mes=ahora.month
+                    ).exists()
+                    
+                    if ya_facturado:
+                        # Ya se le cobró la Acometida este mes, saltamos al siguiente
+                        continue
+
                 try:
                     # Crear la Factura cabecera
                     FacturaModel.objects.create(

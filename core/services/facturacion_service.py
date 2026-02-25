@@ -124,11 +124,25 @@ class FacturacionService:
 
         # B. SOCIOS SIN MEDIDOR (TARIFA FIJA)
         try:
-            from adapters.infrastructure.models import ServicioModel
+            from adapters.infrastructure.models import ServicioModel, FacturaModel
             from core.domain.tarifas_el_arbolito import TARIFA_FIJA
+            from django.utils import timezone
             
+            ahora = timezone.now()
             servicios_fijos = ServicioModel.objects.filter(tipo='FIJO', activo=True).select_related('socio')
+            
             for serv in servicios_fijos:
+                # Verificar si ya existe una factura sin lectura para este socio este mes
+                ya_facturado = FacturaModel.objects.filter(
+                    socio_id=serv.socio.id,
+                    lectura_id__isnull=True,
+                    anio=ahora.year,
+                    mes=ahora.month
+                ).exists()
+                
+                if ya_facturado:
+                    continue # No lo mostramos en pre-emisión
+                
                 datos_pendientes.append({
                     "socio_id": serv.socio.id,
                     "nombres": f"{serv.socio.apellidos} {serv.socio.nombres} (FIJO)",

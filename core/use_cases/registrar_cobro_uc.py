@@ -184,8 +184,8 @@ class RegistrarCobroUseCase:
                 sri_resultado["mensaje"] = "No se pudo cargar datos del socio para SRI."
                 return sri_resultado
 
-                # 1. Generar Clave (si falta)
-            if not factura.sri_clave_acceso:
+            # 1. Generar Clave (si falta o es temporal de facturas recurrentes)
+            if not factura.sri_clave_acceso or factura.sri_clave_acceso.startswith('TEMP-'):
                 # Necesitamos RUC emisor y fecha. 
                 # Refactor Clean Architecture: El servicio SRI encapsula el RUC del emisor.
                 # Ya no necesitamos pasarlo desde el Caso de Uso.

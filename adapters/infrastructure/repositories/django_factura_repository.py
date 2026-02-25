@@ -147,21 +147,26 @@ class DjangoFacturaRepository(IFacturaRepository):
 
     def _mapear_socio(self, socio_db) -> SocioEntity:
         # Mapper auxiliar para el socio
-        direccion_safe = socio_db.direccion if socio_db.direccion else "S/N"
+        direccion_safe = socio_db.direccion if hasattr(socio_db, 'direccion') and socio_db.direccion else "S/N"
+        identidad = getattr(socio_db, 'identificacion', getattr(socio_db, 'cedula', '9999999999'))
+        tipo_id = getattr(socio_db, 'tipo_identificacion', 'CEDULA')
+        
         return SocioEntity(
             id=socio_db.id,
-            cedula=socio_db.cedula,
+            identificacion=identidad,
+            tipo_identificacion=tipo_id,
             nombres=socio_db.nombres,
             apellidos=socio_db.apellidos,
             email=socio_db.email,
-            telefono=socio_db.telefono,
-            barrio_id=socio_db.barrio_id,
+            telefono=getattr(socio_db, 'telefono', None),
+            barrio_id=getattr(socio_db, 'barrio_id', None),
             direccion=direccion_safe,
-            rol=RolUsuario(socio_db.rol),
-            esta_activo=socio_db.esta_activo,
-            usuario_id=socio_db.usuario_id,
+            rol=RolUsuario(socio_db.rol) if hasattr(socio_db, 'rol') else RolUsuario.SOCIO,
+            esta_activo=getattr(socio_db, 'esta_activo', True),
+            usuario_id=getattr(socio_db, 'usuario_id', None),
             # Defaults
             fecha_nacimiento=None,
             discapacidad=False,
-            tercera_edad=False
+            tercera_edad=False,
+            _validate=False # Evitamos que lance error de validación al cargar de BD
         )

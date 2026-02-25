@@ -28,7 +28,7 @@ class SincronizadorSRIView(APIView):
         
         # TAREA 5: Endpoint de Rescate (Admin)
         facturas_pendientes = FacturaModel.objects.filter(
-            estado_sri__in=["PENDIENTE_FIRMA", "PENDIENTE_SRI", "TIMEOUT_FIRMA", "DEVUELTA"]
+            estado_sri__in=["PENDIENTE_FIRMA", "PENDIENTE_SRI", "TIMEOUT_FIRMA", "DEVUELTA", "NO_ENCONTRADO"]
         )
 
         total_encoladas = 0
@@ -36,7 +36,7 @@ class SincronizadorSRIView(APIView):
 
         # Disparar Fan-Out de tareas a Celery (Cola: sri_auth)
         for factura in facturas_pendientes:
-            if factura.estado_sri == "PENDIENTE_SRI":
+            if factura.estado_sri in ["PENDIENTE_SRI", "NO_ENCONTRADO"]:
                 task = task_consultar_autorizacion_sri.delay(factura.id)
             else:
                 task = task_procesar_sri_async.delay(factura.id)

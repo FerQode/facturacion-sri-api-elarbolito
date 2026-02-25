@@ -156,13 +156,13 @@ def task_consultar_autorizacion_sri(self, factura_id: int):
 
             return "AUTORIZADO"
             
-        elif respuesta.estado == "EN PROCESAMIENTO" or (
+        elif respuesta.estado in ["EN PROCESAMIENTO", "NO_ENCONTRADO"] or (
             respuesta.mensaje_error and (
                 "ID:70" in str(respuesta.mensaje_error) or 
                 "ID:700" in str(respuesta.mensaje_error)
             )
         ):
-            logger.warning(f"[CELERY SRI] Factura {factura_id} en procesamiento (ID:70/700). Reintentando...")
+            logger.warning(f"[CELERY SRI] Factura {factura_id} en procesamiento o no encontrada aún. Reintentando...")
             raise self.retry(countdown=60, max_retries=5)
             
         else:

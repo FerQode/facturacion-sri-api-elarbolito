@@ -105,29 +105,98 @@ class FacturacionService:
 
             item = {
                 "socio_id": lectura.medidor.terreno.socio.id,
-                "nombres": f"{lectura.medidor.terreno.socio.nombres} {lectura.medidor.terreno.socio.apellidos}",
+                "nombres": f"{lectura.medidor.terreno.socio.apellidos} {lectura.medidor.terreno.socio.nombres}",
+                "identificacion": lectura.medidor.terreno.socio.identificacion,
+                "lectura_id": f"{int(anterior)} -> {int(actual)}",
+                "lectura_real_id": lectura.id,
+                "medidor_id": lectura.medidor.id,
+                "medidor_codigo": lectura.medidor.codigo,
+                "consumo": "Consumo de Agua Potable", # Rubro visible en frontend
                 "lectura_anterior": float(anterior),
                 "lectura_actual": float(actual),
-                "consumo": float(consumo),
+                "consumo_m3": float(consumo),
                 "valor_agua": round(float(valor_agua), 2),
                 "multas": 0.00,       
                 "subtotal": round(float(valor_agua), 2)
             }
             datos_pendientes.append(item)
 
+        # B. SOCIOS SIN MEDIDOR (TARIFA FIJA)
+        try:
+            from adapters.infrastructure.models import ServicioModel
+            from core.domain.tarifas_el_arbolito import TARIFA_FIJA
+            
+            servicios_fijos = ServicioModel.objects.filter(tipo='FIJO', activo=True).select_related('socio')
+            for serv in servicios_fijos:
+                datos_pendientes.append({
+                    "socio_id": serv.socio.id,
+                    "nombres": f"{serv.socio.apellidos} {serv.socio.nombres} (FIJO)",
+                    "identificacion": serv.socio.identificacion,
+                    "lectura_id": "N/A",
+                    "lectura_real_id": None,
+                    "medidor_id": None,
+                    "medidor_codigo": "N/A",
+                    "consumo": "Tarifa Fija Mensual",
+                    "lectura_anterior": 0.0,
+                    "lectura_actual": 0.0,
+                    "consumo_m3": 0.0,
+                    "valor_agua": float(TARIFA_FIJA),
+                    "multas": 0.00,
+                    "subtotal": float(TARIFA_FIJA)
+                })
+        except Exception as e:
+            print(f"Error cargando servicios fijos: {e}")
+
         return datos_pendientes
 
     @staticmethod
-    def ejecutar_emision_masiva() -> Dict:
+    def ejecutar_emision_masiva(lista_facturas: list) -> Dict:
         """
-        [EN CONSTRUCCIÓN]
-        Toma los datos pendientes calculados en `calcular_pre_emision_masiva`,
-        crea los registros en `FacturaModel` y `DetalleFacturaModel`,
-        y prepara todo para enviar al SRI posteriormente.
+        Toma los datos confirmados del Frontend y crea las Facturas en MySQL de forma Atómica.
         """
-        # Aquí irá toda la lógica de validación transaccional e iteración sobre `FacturaModel.objects.bulk_create`
-        # Por ahora devolvemos un éxito simulado para desbloquear la UI del Frontend.
+        from django.db import transaction
+        from django.utils import timezone
+        import uuid
+        from adapters.infrastructure.models import FacturaModel, LecturaModel
+
+        if not lista_facturas or not isinstance(lista_facturas, list):
+            raise ValueError("No hay datos válidos para la emisión masiva")
+
+        facturas_creadas = 0
+        ahora = timezone.now()
+        vencimiento = ahora + timezone.timedelta(days=15)
+
+        with transaction.atomic():
+            for item in lista_facturas:
+                id_lectura_db = item.get('lectura_real_id')
+
+                # Crear la Factura cabecera
+                FacturaModel.objects.create(
+                    socio_id=item.get('socio_id'),
+                    lectura_id=id_lectura_db, # ID numérico (o None para tarifa fija)
+                    medidor_id=item.get('medidor_id'),
+                    subtotal=item.get('subtotal', 0),
+                    total=item.get('subtotal', 0),
+                    impuestos=0.0,
+                    estado='PENDIENTE',
+                    fecha_emision=ahora.date(),
+                    fecha_registro=ahora,
+                    fecha_vencimiento=vencimiento.date(),
+                    anio=ahora.year,
+                    mes=ahora.month,
+                    sri_ambiente=1,
+                    sri_tipo_emision=1,
+                    clave_acceso_sri=f"TEMP-{uuid.uuid4().hex[:10]}", # Temporal, luego se firma
+                    estado_sri='PENDIENTE'
+                )
+
+                # Marcar lectura como facturada para no duplicar cobros
+                if id_lectura_db:
+                    LecturaModel.objects.filter(id=id_lectura_db).update(esta_facturada=True)
+
+                facturas_creadas += 1
+
         return {
             "estado": "COMPLETADA",
-            "cantidad": 0 # Número de facturas que fueron generadas (Ej: 140)
+            "cantidad": facturas_creadas
         }

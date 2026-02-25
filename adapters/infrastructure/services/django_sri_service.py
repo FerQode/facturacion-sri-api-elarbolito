@@ -9,8 +9,8 @@ from datetime import datetime
 from tempfile import NamedTemporaryFile
 from itertools import cycle
 from pathlib import Path
+from decimal import Decimal
 from django.conf import settings
-
 # Django & Third Party
 from django.conf import settings
 from lxml import etree

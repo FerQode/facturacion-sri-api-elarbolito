@@ -259,54 +259,71 @@ class DjangoSRIService(ISRIService):
             
             if base64_firma:
                 logger.info("🔑 Usando Firma Electrónica desde variable de entorno (Base64)")
-                # Limpieza agresiva del Base64 (Auditoría DevOps)
-                base64_limpia = base64_firma.strip().replace('"', '').replace('\r', '').replace('\n', '')
+                # 1. Limpieza agresiva del Base64 (Auditoría DevOps)
+                base64_limpia = base64_firma.strip().replace('"', '').replace('\r', '').replace('\n', '').replace(' ', '')
                 
-                # REPARACIÓN DE PADDING: Railway o el copy/paste suelen comerse los "=" del final.
+                # Reparación de Padding
                 missing_padding = len(base64_limpia) % 4
                 if missing_padding:
                     base64_limpia += '=' * (4 - missing_padding)
                     
+                # Decodificación estricta
                 try:
                     p12_bytes = base64.b64decode(base64_limpia, validate=True)
-                    logger.info(f"Certificado P12 decodificado correctamente. Tamaño: {len(p12_bytes)} bytes.")
                     if len(p12_bytes) < 1024:
                         raise ValueError("El certificado P12 decodificado es sospechosamente pequeño (< 1KB).")
                 except Exception as e:
                     logger.error(f"Error decodificando Base64 del P12: {e}")
-                    raise ValueError(f"ERROR_CERTIFICADO: Firma base64 corrupta: {str(e)}")
+                    raise ValueError(f"ERROR_CERTIFICADO: Error en variable SRI_FIRMA_BASE64 (basura o corrupta): {str(e)}")
 
-                # Escritura a bajo nivel del P12 para evitar colisión de concurrencia
-                fd_p12, temp_p12_path = tempfile.mkstemp(prefix=f"sri_p12_{req_id}_", suffix='.p12', dir='/tmp')
-                os.write(fd_p12, p12_bytes)
-                os.close(fd_p12) # CRÍTICO: Flush garantizado al SO
-                p12_path_to_use = temp_p12_path
-            
+                # 2. Escritura Binaria y Vaciado a Disco (Crítico)
+                p12_path_to_use = os.path.join('/tmp', f"sri_p12_{req_id}.p12")
+                with open(p12_path_to_use, "wb") as f:
+                    f.write(p12_bytes)
+                    f.flush()
+                    os.fsync(f.fileno()) # Forzar al OS a escribir en disco físico de Railway
+
             if not p12_path_to_use or not os.path.exists(p12_path_to_use):
                 raise FileNotFoundError(f"No se encontró archivo de firma física ni Base64 valido. Ruta intentada: {p12_path_to_use}")
 
-            # 2. Crear archivo temporal para el XML sin firma (y cerrarlo a bajo nivel)
+            # Escribimos también el XML de entrada con fsync garantizado
+            temp_input_path = os.path.join('/tmp', f"sri_xml_{req_id}.xml")
             xml_bytes = xml_string.encode('utf-8')
-            logger.info(f"Generando XML temporal para firma. Tamaño: {len(xml_bytes)} bytes.")
-            fd_xml, temp_input_path = tempfile.mkstemp(prefix=f"sri_xml_{req_id}_", suffix='.xml', dir='/tmp')
-            os.write(fd_xml, xml_bytes)
-            os.close(fd_xml) # CRÍTICO: Flush garantizado al SO
+            with open(temp_input_path, "wb") as f_xml:
+                f_xml.write(xml_bytes)
+                f_xml.flush()
+                os.fsync(f_xml.fileno())
+
+            # 3. Auditoría Forense en los Logs
+            import hashlib
+            import binascii
+            sha256_hash = hashlib.sha256(p12_bytes).hexdigest() if base64_firma else "LOCAL_FILE"
+            hex_prefix = binascii.hexlify(p12_bytes[:16]).decode('ascii') if base64_firma else "UNKNOWN"
+            size_disk = os.path.getsize(p12_path_to_use)
+            logger.info("=== AUDITORÍA FORENSE P12 ===")
+            logger.info(f"SHA-256: {sha256_hash}")
+            logger.info(f"Prefijo Hex (Primeros 16): {hex_prefix} (Debe ser PKCS12 válido, ej. 3082...)")
+            logger.info(f"Tamaño real en disco: {size_disk} bytes")
+            logger.info("=============================")
 
             # El JAR guarda el output en la misma carpeta que el input
             nombre_xml_salida = f"{clave_acceso}_signed.xml"
             output_dir = os.path.dirname(temp_input_path)
             path_xml_firmado = os.path.join(output_dir, nombre_xml_salida)
 
-            # Comando exacto para el JAR
+            # 4. Orden de Argumentos Garantizado para el JAR Externo
             commands = [
                 'java',
                 '-jar', self.jar_path,
-                p12_path_to_use,      # Usamos el path resuelto (Local o Temp)
-                self.auth.firma_pass,
-                temp_input_path,
-                output_dir,
-                nombre_xml_salida
+                p12_path_to_use,      # Argumento 1: Ruta P12
+                self.auth.firma_pass, # Argumento 2: Password
+                temp_input_path,      # Argumento 3: Ruta XML Entrada
+                output_dir,           # Argumento 4: Carpeta de Salida
+                nombre_xml_salida     # Argumento 5: Nombre XML Firmado
             ]
+            
+            masked_commands = [c if c != self.auth.firma_pass else '***' for c in commands]
+            logger.info(f"FORENSIC JAR CMD -> {masked_commands}")
 
             # Ejecutar Java con Timeout (Auditoría: Proteger workers de Gunicorn)
             try:

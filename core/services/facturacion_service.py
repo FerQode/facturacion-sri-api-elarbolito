@@ -149,8 +149,7 @@ class FacturacionService:
 
         return datos_pendientes
 
-    @staticmethod
-    def ejecutar_emision_masiva(lista_facturas: list) -> Dict:
+    def ejecutar_emision_masiva(self, lista_facturas: list) -> Dict:
         """
         Toma los datos confirmados del Frontend y crea las Facturas en MySQL de forma Atómica.
         """

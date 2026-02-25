@@ -102,9 +102,9 @@ class RegistrarCobroUseCase:
         resultado_sri = self._procesar_sri_y_notificar(factura)
 
         # 8. Construcción de respuesta estricta según contrato de UI (EJE 2)
-        sri_status_mapped = "OK" if sri_resultado.get("estado") == "AUTORIZADO" else ("SRI_ERROR" if sri_resultado.get("estado") == "ERROR_FIRMA" else "SRI_PENDIENTE")
+        sri_status_mapped = "OK" if resultado_sri.get("estado") == "AUTORIZADO" else ("SRI_ERROR" if resultado_sri.get("estado") == "ERROR_FIRMA" else "SRI_PENDIENTE")
         
-        final_response = self._build_api_contract_response(sri_status_mapped, sri_resultado.get("mensaje", ""), factura, total_acumulado)
+        final_response = self._build_api_contract_response(sri_status_mapped, resultado_sri.get("mensaje", ""), factura, total_acumulado)
         
         # Guardar idempotencia en Redis/Cache por 24 horas
         cache.set(idempotency_key, final_response, timeout=86400)

@@ -261,6 +261,12 @@ class DjangoSRIService(ISRIService):
                 logger.info("🔑 Usando Firma Electrónica desde variable de entorno (Base64)")
                 # Limpieza agresiva del Base64 (Auditoría DevOps)
                 base64_limpia = base64_firma.strip().replace('"', '').replace('\r', '').replace('\n', '')
+                
+                # REPARACIÓN DE PADDING: Railway o el copy/paste suelen comerse los "=" del final.
+                missing_padding = len(base64_limpia) % 4
+                if missing_padding:
+                    base64_limpia += '=' * (4 - missing_padding)
+                    
                 try:
                     p12_bytes = base64.b64decode(base64_limpia, validate=True)
                     logger.info(f"Certificado P12 decodificado correctamente. Tamaño: {len(p12_bytes)} bytes.")

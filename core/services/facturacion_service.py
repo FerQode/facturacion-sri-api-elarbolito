@@ -99,7 +99,7 @@ class FacturacionService:
                 consumo = 0
 
             # Calculo base de tarifa (Tarifa Fija de ejemplo o escalonada)
-            tarifa_m3 = 0.50
+            tarifa_m3 = Decimal('0.50')
             valor_agua = consumo * tarifa_m3
 
             item = {

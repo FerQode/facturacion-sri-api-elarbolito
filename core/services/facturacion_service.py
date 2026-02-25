@@ -84,6 +84,9 @@ class FacturacionService:
         except Exception:
             return []
 
+        # Importamos la evaluación pura del dominio de tarifas de El Arbolito
+        from core.domain.tarifas_el_arbolito import calcular_total_medidor_el_arbolito
+
         for lectura in lecturas:
             # DEFENSIVO: Si el medidor no tiene terreno asignado (está en bodega o retirado) 
             # o el terreno no tiene socio, saltamos esta lectura para no crashear.
@@ -91,23 +94,14 @@ class FacturacionService:
                 continue
 
             # Los campos reales en LecturaModel son `valor` y `lectura_anterior`
-            actual = lectura.valor or 0
-            anterior = lectura.lectura_anterior or 0
+            actual = lectura.valor or Decimal('0')
+            anterior = lectura.lectura_anterior or Decimal('0')
             
             consumo = actual - anterior
-            if consumo < 0: 
-                consumo = 0
 
-            # Calculo basado en Tarifa Escalonada (Reglas de Negocio de la Junta)
-            TARIFA_BASE_M3 = Decimal('10') # Ej: Los primeros 10 m3 están incluidos en la base
-            TARIFA_BASE_PRECIO = Decimal('3.00') # Base fija a pagar
-            TARIFA_EXCEDENTE_PRECIO = Decimal('0.25') # Valor de cada m3 adicional
-            
-            if consumo <= TARIFA_BASE_M3:
-                valor_agua = TARIFA_BASE_PRECIO
-            else:
-                excedente = consumo - TARIFA_BASE_M3
-                valor_agua = TARIFA_BASE_PRECIO + (excedente * TARIFA_EXCEDENTE_PRECIO)
+            # Regla de Negocio: Modalidad MEDIDORES
+            # Delegamos el cálculo a la función pura del reglamento oficial
+            valor_agua = calcular_total_medidor_el_arbolito(consumo)
 
             item = {
                 "socio_id": lectura.medidor.terreno.socio.id,

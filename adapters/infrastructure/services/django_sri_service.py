@@ -244,6 +244,9 @@ class DjangoSRIService(ISRIService):
         temp_p12_path = "" # Path del archivo P12 temporal (si se usa Base64)
 
         try:
+            import tempfile
+            import os
+            
             # 1. Resolver el archivo P12
             p12_path_to_use = self.auth.firma_path
             
@@ -252,21 +255,19 @@ class DjangoSRIService(ISRIService):
             
             if base64_firma:
                 logger.info("🔑 Usando Firma Electrónica desde variable de entorno (Base64)")
-                # Creamos archivo temporal P12 y lo cerramos explícitamente para que Java lo pueda leer
-                temp_p12 = NamedTemporaryFile(suffix='.p12', delete=False)
-                temp_p12.write(base64.b64decode(base64_firma))
-                temp_p12.close()  # CRÍTICO: Cerrar para vaciar buffer a disco
-                temp_p12_path = temp_p12.name
+                # Escritura a bajo nivel del P12 para evitar cualquier alteración de formato
+                fd_p12, temp_p12_path = tempfile.mkstemp(suffix='.p12')
+                os.write(fd_p12, base64.b64decode(base64_firma))
+                os.close(fd_p12) # CRÍTICO: Flush garantizado al SO
                 p12_path_to_use = temp_p12_path
             
             if not p12_path_to_use or not os.path.exists(p12_path_to_use):
                 raise FileNotFoundError(f"No se encontró archivo de firma física ni Base64 valido. Ruta intentada: {p12_path_to_use}")
 
-            # 2. Crear archivo temporal para el XML sin firma (y cerrarlo)
-            temp_input = NamedTemporaryFile(suffix='.xml', delete=False)
-            temp_input.write(xml_string.encode('utf-8'))
-            temp_input.close() # CRÍTICO: Cerrar para vaciar buffer a disco
-            temp_input_path = temp_input.name
+            # 2. Crear archivo temporal para el XML sin firma (y cerrarlo a bajo nivel)
+            fd_xml, temp_input_path = tempfile.mkstemp(suffix='.xml')
+            os.write(fd_xml, xml_string.encode('utf-8'))
+            os.close(fd_xml) # CRÍTICO: Flush garantizado al SO
 
             # El JAR guarda el output en la misma carpeta que el input
             nombre_xml_salida = f"{clave_acceso}_signed.xml"

@@ -190,7 +190,10 @@ class RegistrarCobroUseCase:
             self.factura_repo.guardar(factura)
 
         except Exception as e:
-            sri_resultado["estado"] = "ERROR_SISTEMA"
+            sri_resultado["estado"] = "ERROR_FIRMA"
             sri_resultado["mensaje"] = f"Fallo proceso SRI: {str(e)}"
+            factura.estado_sri = "ERROR_FIRMA"
+            factura.sri_mensaje_error = str(e)
+            self.factura_repo.guardar(factura)
         
         return sri_resultado

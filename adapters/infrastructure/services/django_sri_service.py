@@ -255,9 +255,19 @@ class DjangoSRIService(ISRIService):
             
             if base64_firma:
                 logger.info("🔑 Usando Firma Electrónica desde variable de entorno (Base64)")
+                # Limpieza agresiva del Base64 (Auditoría DevOps)
+                base64_limpia = base64_firma.strip().replace('"', '').replace('\r', '').replace('\n', '')
+                try:
+                    p12_bytes = base64.b64decode(base64_limpia, validate=True)
+                    if len(p12_bytes) < 1024:
+                        raise ValueError("El certificado P12 decodificado es sospechosamente pequeño (< 1KB).")
+                except Exception as e:
+                    logger.error(f"Error decodificando Base64 del P12: {e}")
+                    raise ValueError(f"Firma base64 corrupta: {str(e)}")
+
                 # Escritura a bajo nivel del P12 para evitar cualquier alteración de formato
-                fd_p12, temp_p12_path = tempfile.mkstemp(suffix='.p12')
-                os.write(fd_p12, base64.b64decode(base64_firma))
+                fd_p12, temp_p12_path = tempfile.mkstemp(suffix='.p12', dir='/tmp')
+                os.write(fd_p12, p12_bytes)
                 os.close(fd_p12) # CRÍTICO: Flush garantizado al SO
                 p12_path_to_use = temp_p12_path
             
@@ -265,7 +275,7 @@ class DjangoSRIService(ISRIService):
                 raise FileNotFoundError(f"No se encontró archivo de firma física ni Base64 valido. Ruta intentada: {p12_path_to_use}")
 
             # 2. Crear archivo temporal para el XML sin firma (y cerrarlo a bajo nivel)
-            fd_xml, temp_input_path = tempfile.mkstemp(suffix='.xml')
+            fd_xml, temp_input_path = tempfile.mkstemp(suffix='.xml', dir='/tmp')
             os.write(fd_xml, xml_string.encode('utf-8'))
             os.close(fd_xml) # CRÍTICO: Flush garantizado al SO
 

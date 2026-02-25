@@ -83,7 +83,7 @@ from adapters.api.views import (
     # Granulares (Nativos)
     BarrioViewSet, InventarioViewSet, LecturaViewSet, MedidorViewSet,
     MultaViewSet, OrdenTrabajoViewSet, CortesViewSet, SocioViewSet,
-    # TerrenoViewSet, # Descomenta si tienes el view creado
+    TerrenoViewSet, # Descomenta si tienes el view creado
     # ServicioAguaViewSet, # Descomenta si tienes el view creado
     # Comercial Helpers
     FacturaViewSet, PagoViewSet, CatalogoRubroViewSet, ProductoMaterialViewSet,
@@ -99,7 +99,7 @@ router = DefaultRouter()
 router.register(r'socios', SocioViewSet, basename='socio')
 router.register(r'barrios', BarrioViewSet, basename='barrio')
 router.register(r'rubros', CatalogoRubroViewSet, basename='rubro')
-# router.register(r'terrenos', TerrenoViewSet, basename='terreno') # Activar si existe el ViewSet
+router.register(r'terrenos', TerrenoViewSet, basename='terreno') # Activar si existe el ViewSet
 
 # --- 2. Financiero & Billing ---
 router.register(r'cobros', CobroViewSet, basename='cobro')             # Ventanilla

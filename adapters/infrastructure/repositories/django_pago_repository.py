@@ -8,19 +8,20 @@ from core.shared.enums import MetodoPagoEnum
 class DjangoPagoRepository(IPagoRepository):
 
     def obtener_sumatoria_validada(self, factura_id: int) -> float:
+        # El vínculo Factura-Pago web ahora vive en la observación para pagos directos a una factura
         suma = PagoModel.objects.filter(
-            factura_id=factura_id,
-            metodo=MetodoPagoEnum.TRANSFERENCIA.value,
+            observacion__icontains=f"Factura #{factura_id}",
+            detalles_metodos__metodo=MetodoPagoEnum.TRANSFERENCIA.value,
             validado=True
-        ).aggregate(Sum('monto'))
+        ).aggregate(Sum('monto_total'))
         
-        resultado = suma['monto__sum'] or Decimal("0.00")
+        resultado = suma['monto_total__sum'] or Decimal("0.00")
         return float(resultado)
 
     def tiene_pagos_pendientes(self, factura_id: int) -> bool:
         return PagoModel.objects.filter(
-            factura_id=factura_id,
-            metodo=MetodoPagoEnum.TRANSFERENCIA.value,
+            observacion__icontains=f"Factura #{factura_id}",
+            detalles_metodos__metodo=MetodoPagoEnum.TRANSFERENCIA.value,
             validado=False
         ).exists()
 

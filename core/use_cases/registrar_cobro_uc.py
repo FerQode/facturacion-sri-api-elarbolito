@@ -38,8 +38,19 @@ class RegistrarCobroUseCase:
             raise EntityNotFoundException(f"La factura {factura_id} no existe.")
 
         # 2. Validaciones de Dominio Puras
-        if factura.estado == EstadoFactura.PAGADA:
-            raise BusinessRuleException("Esta factura ya se encuentra PAGADA.")
+        # 2. Validaciones de Dominio Puras (Idempotencia)
+        if factura.estado == EstadoFactura.PAGADA.value:
+            # Idempotencia: Si ya está pagada (tal vez el frontend reintentó un doble click)
+            # no levantamos error 400 que rompa, sino que devolvemos el estado actual para que consulte el PDF.
+            if factura.estado_sri == "AUTORIZADO":
+                 return {
+                    "mensaje": "La factura ya se encontraba pagada y autorizada exitosamente. No se ha duplicado el cobro.",
+                    "factura_id": factura.id,
+                    "nuevo_estado": "PAGADA",
+                    "sri": {"estado": "AUTORIZADO", "mensaje": "Factura previamente autorizada."}
+                 }
+            else:
+                 raise BusinessRuleException(f"La factura ya está cobrada en caja pero el SRI falló previamente (Estado: {factura.estado_sri}). Por favor reintente la firma desde el panel SRI.")
         
         # (Asumimos que la validación de ANULADA se maneja igual si existiera el estado)
 

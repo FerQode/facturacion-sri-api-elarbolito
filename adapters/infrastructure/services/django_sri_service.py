@@ -246,6 +246,10 @@ class DjangoSRIService(ISRIService):
         try:
             import tempfile
             import os
+            import uuid
+            
+            # Generar identificador único para concurrencia
+            req_id = uuid.uuid4().hex[:8]
             
             # 1. Resolver el archivo P12
             p12_path_to_use = self.auth.firma_path
@@ -265,8 +269,8 @@ class DjangoSRIService(ISRIService):
                     logger.error(f"Error decodificando Base64 del P12: {e}")
                     raise ValueError(f"Firma base64 corrupta: {str(e)}")
 
-                # Escritura a bajo nivel del P12 para evitar cualquier alteración de formato
-                fd_p12, temp_p12_path = tempfile.mkstemp(suffix='.p12', dir='/tmp')
+                # Escritura a bajo nivel del P12 para evitar colisión de concurrencia
+                fd_p12, temp_p12_path = tempfile.mkstemp(prefix=f"sri_p12_{req_id}_", suffix='.p12', dir='/tmp')
                 os.write(fd_p12, p12_bytes)
                 os.close(fd_p12) # CRÍTICO: Flush garantizado al SO
                 p12_path_to_use = temp_p12_path
@@ -275,7 +279,7 @@ class DjangoSRIService(ISRIService):
                 raise FileNotFoundError(f"No se encontró archivo de firma física ni Base64 valido. Ruta intentada: {p12_path_to_use}")
 
             # 2. Crear archivo temporal para el XML sin firma (y cerrarlo a bajo nivel)
-            fd_xml, temp_input_path = tempfile.mkstemp(suffix='.xml', dir='/tmp')
+            fd_xml, temp_input_path = tempfile.mkstemp(prefix=f"sri_xml_{req_id}_", suffix='.xml', dir='/tmp')
             os.write(fd_xml, xml_string.encode('utf-8'))
             os.close(fd_xml) # CRÍTICO: Flush garantizado al SO
 
@@ -295,12 +299,16 @@ class DjangoSRIService(ISRIService):
                 nombre_xml_salida
             ]
 
-            # Ejecutar Java
-            result = subprocess.run(commands, capture_output=True, text=True)
+            # Ejecutar Java con Timeout (Auditoría: Proteger workers de Gunicorn)
+            try:
+                result = subprocess.run(commands, capture_output=True, text=True, timeout=15)
+            except subprocess.TimeoutExpired:
+                logger.error("Timeout: El JAR de firma SRI tardó más de 15 segundos.")
+                raise Exception("El servicio local de firma SRI (Java) excedió el tiempo límite de espera.")
 
             if result.returncode != 0:
                 logger.error(f"Error Java STDERR: {result.stderr}")
-                logger.error(f"Error Java STDOUT: {result.stdout}")
+                logger.error(f"Error Java STDOUT: {result.stdout[:500]}") # Truncar para logs
                 raise Exception(f"Fallo al firmar con Java: {result.stderr}")
 
             # Leer el archivo firmado resultante

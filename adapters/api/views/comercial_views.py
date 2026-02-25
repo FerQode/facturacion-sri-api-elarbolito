@@ -40,45 +40,20 @@ class FacturaViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
     search_fields = ['socio__identificacion', 'numero_secuencial']
 
-    # --- 1. Pre-Emisión (ACTIVO Y FUNCIONAL) ---
+    # --- 1. Pre-Emisión (ACTIVO Y FUNCIONAL - REFACTORIZADO CLEAN ARCH) ---
     @action(detail=False, methods=['get'], url_path='pre-emision')
     def pre_emision(self, request):
         """
         Calcula qué se va a facturar basándose en las LECTURAS registradas en el sistema.
+        Delegado al Dominio (FacturacionService) para no ensuciar el Adapter.
         """
-        datos_pendientes = []
-
-        # 1. Buscamos todas las lecturas.
-        # (Idealmente filtraríamos por estado='PENDIENTE', pero usamos .all() para asegurar que traiga algo si existe)
-        try:
-            lecturas = LecturaModel.objects.select_related('medidor', 'medidor__terreno', 'medidor__terreno__socio').all()
-        except:
-            lecturas = []
-
-        # 2. Recorremos las lecturas y calculamos los valores
-        for lectura in lecturas:
-            # Cálculos básicos
-            consumo = lectura.actual - lectura.anterior
-            if consumo < 0: consumo = 0 # Evitar negativos
-
-            # Tarifa Base (Ejemplo: $0.50 por metro cúbico)
-            tarifa_m3 = 0.50
-            valor_agua = consumo * tarifa_m3
-
-            # Armamos el objeto para el Frontend
-            item = {
-                "socio_id": lectura.medidor.terreno.socio.id,
-                "nombres": f"{lectura.medidor.terreno.socio.nombres} {lectura.medidor.terreno.socio.apellidos}",
-                "lectura_anterior": lectura.anterior,
-                "lectura_actual": lectura.actual,
-                "consumo": consumo,
-                "valor_agua": round(valor_agua, 2),
-                "multas": 0.00,       # Se podría sumar desde MultaModel si fuera necesario
-                "subtotal": round(valor_agua, 2)
-            }
-            datos_pendientes.append(item)
-
-        # Si no hay lecturas, retornará [] (lista vacía), mostrando 0 en el dashboard y CERO errores.
+        # Importamos el servicio de dominio (idealmente inyectado, pero así sirve por ahora)
+        from core.services.facturacion_service import FacturacionService
+        
+        # El Adapter (Vista) solo orquesta: Llama al servicio y retorna HTTP
+        service = FacturacionService()
+        datos_pendientes = service.calcular_pre_emision_masiva()
+        
         return Response(datos_pendientes, status=status.HTTP_200_OK)
 
     # --- 2. Pendientes ---

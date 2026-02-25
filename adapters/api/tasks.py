@@ -67,7 +67,11 @@ def task_procesar_sri_async(self, factura_id: int):
             # Encolar Paso 2 con delay
             task_consultar_autorizacion_sri.apply_async(args=[factura_id], countdown=10)
         else:
-            is_processing = respuesta.mensaje_error and ("ID:70" in respuesta.mensaje_error.upper() or "EN PROCESAMIENTO" in respuesta.mensaje_error.upper())
+            is_processing = respuesta.mensaje_error and (
+                "ID:70" in respuesta.mensaje_error.upper() or 
+                "ID:700" in respuesta.mensaje_error.upper() or 
+                "EN PROCESAMIENTO" in respuesta.mensaje_error.upper()
+            )
             if is_processing:
                 factura.estado_sri = "PENDIENTE_SRI"
                 factura.sri_mensaje_error = respuesta.mensaje_error
@@ -152,8 +156,13 @@ def task_consultar_autorizacion_sri(self, factura_id: int):
 
             return "AUTORIZADO"
             
-        elif respuesta.estado == "EN PROCESAMIENTO" or (respuesta.mensaje_error and "ID:70" in str(respuesta.mensaje_error)):
-            logger.warning(f"[CELERY SRI] Factura {factura_id} en procesamiento (ID:70). Reintentando...")
+        elif respuesta.estado == "EN PROCESAMIENTO" or (
+            respuesta.mensaje_error and (
+                "ID:70" in str(respuesta.mensaje_error) or 
+                "ID:700" in str(respuesta.mensaje_error)
+            )
+        ):
+            logger.warning(f"[CELERY SRI] Factura {factura_id} en procesamiento (ID:70/700). Reintentando...")
             raise self.retry(countdown=60, max_retries=5)
             
         else:

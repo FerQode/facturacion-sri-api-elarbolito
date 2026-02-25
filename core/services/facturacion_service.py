@@ -98,9 +98,16 @@ class FacturacionService:
             if consumo < 0: 
                 consumo = 0
 
-            # Calculo base de tarifa (Tarifa Fija de ejemplo o escalonada)
-            tarifa_m3 = Decimal('0.50')
-            valor_agua = consumo * tarifa_m3
+            # Calculo basado en Tarifa Escalonada (Reglas de Negocio de la Junta)
+            TARIFA_BASE_M3 = Decimal('10') # Ej: Los primeros 10 m3 están incluidos en la base
+            TARIFA_BASE_PRECIO = Decimal('3.00') # Base fija a pagar
+            TARIFA_EXCEDENTE_PRECIO = Decimal('0.25') # Valor de cada m3 adicional
+            
+            if consumo <= TARIFA_BASE_M3:
+                valor_agua = TARIFA_BASE_PRECIO
+            else:
+                excedente = consumo - TARIFA_BASE_M3
+                valor_agua = TARIFA_BASE_PRECIO + (excedente * TARIFA_EXCEDENTE_PRECIO)
 
             item = {
                 "socio_id": lectura.medidor.terreno.socio.id,

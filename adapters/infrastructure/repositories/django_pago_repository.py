@@ -27,52 +27,39 @@ class DjangoPagoRepository(IPagoRepository):
     def registrar_pagos(self, factura_id: int, pagos: List[dict]) -> None:
         """
         Registra pagos provenientes de caja (Ventanilla).
-        Soporta EFECTIVO y TRANSFERENCIA.
-        Si viene transferencia por aquí (Mixto), se asume validada porque el cajero ya revisó.
+        Crea una cabecera PagoModel y sus DetallePagoModel.
         """
-        # Limpiamos solo pagos que podríamos estar reescribiendo en esta sesión de caja
-        # OJO: Si borramos transferencias anteriores validadas por tesorería sería un error.
-        # Pero aquí asumimos pagos "nuevos" de esta transacción.
-        # Para evitar duplicados en reintentos, podríamos borrar por 'origen' si tuviéramos ese campo.
-        # Por ahora, mantenemos la limpieza de EFECTIVO para idempotencia básica,
-        # y agregamos las transferencias nuevas.
+        from adapters.infrastructure.models import PagoModel, DetallePagoModel, FacturaModel
         
-        # Eliminar efectivo previo de esta factura (idempotencia simple)
-        PagoModel.objects.filter(
-            factura_id=factura_id,
-            metodo=MetodoPagoEnum.EFECTIVO.value
-        ).delete()
+        # 1. Obtenemos la Factura para saber a qué socio pertenece el pago
+        factura = FacturaModel.objects.select_related('socio').get(id=factura_id)
         
-        pagos_a_crear = []
+        # 2. Creamos la CABECERA del Pago
+        total_monto = sum(Decimal(str(p['monto'])) for p in pagos)
+        
+        pago_header = PagoModel.objects.create(
+            socio=factura.socio,
+            monto_total=total_monto,
+            validado=True,
+            observacion=f"Pago en Ventanilla (Factura #{factura_id})"
+        )
+        
+        # 3. Creamos los DETALLES (Efectivo, Transferencia, etc)
+        detalles_a_crear = []
         for p in pagos:
             metodo = p.get('metodo')
             monto = Decimal(str(p['monto']))
             referencia = p.get('referencia')
-            observacion = p.get('observacion')
             
-            if metodo == MetodoPagoEnum.EFECTIVO.value:
-                pagos_a_crear.append(PagoModel(
-                    factura_id=factura_id,
-                    metodo=MetodoPagoEnum.EFECTIVO.value,
-                    monto=monto,
-                    referencia=None, # Efectivo no tiene ref
-                    observacion=observacion,
-                    validado=True
-                ))
-            
-            elif metodo == MetodoPagoEnum.TRANSFERENCIA.value:
-                # Si es transferencia en Ventanilla (Mixto), nace validada.
-                pagos_a_crear.append(PagoModel(
-                    factura_id=factura_id,
-                    metodo=MetodoPagoEnum.TRANSFERENCIA.value,
-                    monto=monto,
-                    referencia=referencia,
-                    observacion=f"{observacion or ''} (Val. Ventanilla)",
-                    validado=True 
-                ))
+            detalles_a_crear.append(DetallePagoModel(
+                pago=pago_header,
+                metodo=metodo,
+                monto=monto,
+                referencia=referencia
+            ))
 
-        if pagos_a_crear:
-            PagoModel.objects.bulk_create(pagos_a_crear)
+        if detalles_a_crear:
+            DetallePagoModel.objects.bulk_create(detalles_a_crear)
 
     def obtener_ultimos_pagos(self, socio_id: int, limite: int = 5) -> List[dict]:
         """

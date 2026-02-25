@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu \
     fonts-liberation \
     fontconfig \
+    default-jre-headless \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

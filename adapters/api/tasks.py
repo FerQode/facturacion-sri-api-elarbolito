@@ -41,7 +41,7 @@ def task_procesar_sri_async(self, factura_id: int):
                 id=socio_db.id, identificacion=socio_db.identificacion, nombres=socio_db.nombres,
                 apellidos=socio_db.apellidos, email=socio_db.email, direccion=socio_db.direccion,
                 tipo_identificacion=socio_db.tipo_identificacion, esta_activo=socio_db.esta_activo,
-                barrio_id=socio_db.barrio_id, modalidad_cobro=socio_db.modalidad_cobro, rol=socio_db.rol
+                barrio_id=socio_db.barrio_id, rol=socio_db.rol, _validate=False
             )
         except SocioModel.DoesNotExist:
             logger.error(f"[CELERY SRI] Socio {factura.socio_id} no encontrado para Factura {factura_id}")

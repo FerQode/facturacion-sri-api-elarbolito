@@ -85,14 +85,21 @@ class FacturaViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-    # --- 2. Pendientes ---
+    # --- 2. Pendientes e Historial ---
     @action(detail=False, methods=['get'], url_path='pendientes')
     def pendientes(self, request):
         """
         Retorna las facturas que NO están pagadas, con soporte de filtros.
+        Si ver_historial=true, retorna el historial completo (incluyendo PAGADAS).
         """
         from django.db.models import Q
-        qs = self.get_queryset().exclude(estado='PAGADA')
+        qs = self.get_queryset()
+        
+        ver_historial = request.GET.get('ver_historial') == 'true'
+        
+        # Filtro Central: Si no piden historial, ocultamos las pagadas/anuladas
+        if not ver_historial:
+            qs = qs.exclude(estado__in=['PAGADA', 'ANULADA'])
 
         # 🔎 FILTRO POR IDENTIFICACIÓN / NOMBRE / APELLIDO
         identificacion = request.GET.get('identificacion')

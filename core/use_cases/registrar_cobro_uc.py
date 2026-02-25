@@ -41,9 +41,10 @@ class RegistrarCobroUseCase:
 
         # 2. Validaciones de Dominio Puras
         # 2. Validaciones de Dominio Puras & Idempotencia Real (EJE 3)
-        # Derivar llave de idempotencia: factura_id + sumatoria_montos + "caja"
+        # Derivar llave de idempotencia: factura_id + sumatoria_montos + fecha_dia + "caja"
         monto_total_req = sum(Decimal(str(p['monto'])) for p in lista_pagos)
-        raw_key = f"cobro_{factura_id}_{monto_total_req}_caja"
+        fecha_dia = datetime.now().strftime('%Y%m%d')
+        raw_key = f"cobro_{factura_id}_{monto_total_req}_{fecha_dia}_caja"
         idempotency_key = hashlib.sha256(raw_key.encode('utf-8')).hexdigest()
 
         # Revisar si ya procesamos esta misma petición exacta recientemente

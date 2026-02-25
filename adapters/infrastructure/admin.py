@@ -123,8 +123,8 @@ class DetalleFacturaInline(admin.TabularInline):
 
 @admin.register(FacturaModel)
 class FacturaAdmin(SimpleHistoryAdmin):
-    list_display = ('id', 'get_socio', 'fecha_emision', 'total', 'estado', 'es_fiscal', 'estado_sri')
-    list_filter = ('estado', 'es_fiscal', 'estado_sri', 'fecha_emision')
+    list_display = ('id', 'get_socio', 'fecha_emision', 'total', 'estado_financiero', 'es_fiscal', 'estado_sri')
+    list_filter = ('estado_financiero', 'es_fiscal', 'estado_sri', 'fecha_emision')
     search_fields = ('socio__identificacion', 'clave_acceso_sri') 
     
     inlines = [DetalleFacturaInline]

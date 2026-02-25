@@ -38,7 +38,7 @@ class DjangoFacturaRepository(IFacturaRepository):
             servicio_id=servicio_id,
             anio=anio,
             mes=mes,
-            estado__in=[EstadoFactura.PENDIENTE.value, EstadoFactura.PAGADA.value]
+            estado_financiero__in=[EstadoFactura.PENDIENTE.value, EstadoFactura.PAGADA.value]
         ).exists()
 
     def guardar(self, factura: FacturaEntity) -> None:
@@ -55,7 +55,7 @@ class DjangoFacturaRepository(IFacturaRepository):
                 fecha_vencimiento=factura.fecha_vencimiento,
                 anio=factura.anio,
                 mes=factura.mes,
-                estado=factura.estado.value if hasattr(factura.estado, 'value') else factura.estado,
+                estado_financiero=factura.estado.value if hasattr(factura.estado, 'value') else factura.estado,
                 subtotal=factura.subtotal,
                 impuestos=factura.impuestos,
                 total=factura.total,
@@ -81,7 +81,7 @@ class DjangoFacturaRepository(IFacturaRepository):
             f_db = FacturaModel.objects.get(id=factura.id)
             
             # Actualizamos campos modificables por el Caso de Uso Concepto
-            f_db.estado = factura.estado.value if hasattr(factura.estado, 'value') else factura.estado
+            f_db.estado_financiero = factura.estado.value if hasattr(factura.estado, 'value') else factura.estado
             f_db.anio = factura.anio
             f_db.mes = factura.mes
             

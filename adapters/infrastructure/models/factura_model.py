@@ -9,7 +9,7 @@ from .lectura_model import LecturaModel
 # ### NUEVO: Importamos el modelo de Servicio (Debes haber creado el archivo servicio_model.py primero)
 from .servicio_model import ServicioModel
 from .catalogo_models import CatalogoRubroModel
-from core.shared.enums import EstadoFactura
+from core.shared.enums import EstadoFactura, EstadoFinanciero, EstadoSRI
 
 
 class FacturaModel(models.Model):
@@ -45,7 +45,12 @@ class FacturaModel(models.Model):
     mes = models.PositiveSmallIntegerField(default=1, verbose_name="Mes Fiscal")
     # -----------------------------------------------
 
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=EstadoFactura.PENDIENTE.value)
+    estado_financiero = models.CharField(max_length=20, choices=EstadoFinanciero.choices, default=EstadoFinanciero.PENDIENTE)
+
+    @property
+    def estado(self):
+        """Mantiene compatibilidad hacia atrás con el código legacy de UI/Angular"""
+        return self.estado_financiero
 
     # Totales
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
@@ -64,8 +69,8 @@ class FacturaModel(models.Model):
                                     help_text="True=Factura Electrónica, False=Recibo Interno/Proforma")
     # --------------------------------------------------------------
 
-    # Mantenemos tu corrección del estado_sri
-    estado_sri = models.CharField(max_length=50, null=True, blank=True,
+    # Estado SRI con Enum
+    estado_sri = models.CharField(max_length=50, choices=EstadoSRI.choices, default=EstadoSRI.NO_ENVIADA,
                                   help_text="Estado devuelto por el SRI (RECIBIDA, AUTORIZADO, etc)")
 
     fecha_autorizacion_sri = models.DateTimeField(null=True, blank=True)

@@ -203,31 +203,37 @@ class DjangoSRIService(ISRIService):
             # Detalles
             detalles = etree.SubElement(xml_factura, "detalles")
             
-            # FIXED TARIFF FALLBACK (Acometidas sin medidor)
-            # El SRI exige mínimo 1 detalle. Si la factura llega sin detalles, creamos uno al vuelo.
+            # FASE 2: FIX RESILIENTE (NO HARDCODE)
+            # Inyección dinámica para Tarifa Fija (sin medidor)
             if not factura.detalles:
                 from core.domain.factura import DetalleFactura
                 factura.detalles.append(DetalleFactura(
                     id=None,
-                    concepto="Servicio de Agua Potable (Tarifa Fija sin Medidor)",
-                    cantidad=Decimal("1.00"),
+                    concepto="Servicio de Agua - Tarifa Fija",
+                    cantidad=Decimal("1.000000"),
                     precio_unitario=factura.subtotal,
                     subtotal=factura.subtotal
                 ))
+
+            # FASE 3: VALIDACIÓN PREVENTIVA
+            if not factura.detalles:
+                raise ValueError("XML inválido: nodo <detalles> vacío")
 
             for i, detalle_entidad in enumerate(factura.detalles, 1):
                 detalle_xml = etree.SubElement(detalles, "detalle")
                 etree.SubElement(detalle_xml, "codigoPrincipal").text = str(i)
                 etree.SubElement(detalle_xml, "descripcion").text = detalle_entidad.concepto[:300]
-                etree.SubElement(detalle_xml, "cantidad").text = f"{detalle_entidad.cantidad:.2f}"
+                
+                # FASE 4: Garantizar cantidad con decimales correctos (1.000000 o real)
+                etree.SubElement(detalle_xml, "cantidad").text = f"{detalle_entidad.cantidad:.6f}"
                 etree.SubElement(detalle_xml, "precioUnitario").text = f"{detalle_entidad.precio_unitario:.4f}"
                 etree.SubElement(detalle_xml, "descuento").text = "0.00"
                 etree.SubElement(detalle_xml, "precioTotalSinImpuesto").text = f"{detalle_entidad.subtotal:.2f}"
 
                 impuestos_detalle = etree.SubElement(detalle_xml, "impuestos")
                 impuesto_detalle = etree.SubElement(impuestos_detalle, "impuesto")
-                etree.SubElement(impuesto_detalle, "codigo").text = "2"
-                etree.SubElement(impuesto_detalle, "codigoPorcentaje").text = "0"
+                etree.SubElement(impuesto_detalle, "codigo").text = "2" # IVA
+                etree.SubElement(impuesto_detalle, "codigoPorcentaje").text = "0" # 0%
                 etree.SubElement(impuesto_detalle, "tarifa").text = "0"
                 etree.SubElement(impuesto_detalle, "baseImponible").text = f"{detalle_entidad.subtotal:.2f}"
                 etree.SubElement(impuesto_detalle, "valor").text = "0.00"

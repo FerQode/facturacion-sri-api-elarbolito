@@ -1,5 +1,6 @@
 # core/domain/shared/enums.py
 from enum import Enum
+from django.db import models
 
 class EstadoFactura(Enum):
     """
@@ -80,3 +81,17 @@ class EstadoSolicitud(Enum):
     PENDIENTE = "PENDIENTE"
     APROBADA = "APROBADA"
     RECHAZADA = "RECHAZADA"
+
+class EstadoFinanciero(models.TextChoices):
+    PENDIENTE = 'PENDIENTE', 'Pendiente'
+    PAGADA = 'PAGADA', 'Pagada'
+    ANULADA = 'ANULADA', 'Anulada'
+
+class EstadoSRI(models.TextChoices):
+    NO_ENVIADA = 'NO_ENVIADA', 'No Enviada'
+    PENDIENTE_FIRMA = 'PENDIENTE_FIRMA', 'Pendiente de Firma'
+    PENDIENTE_SRI = 'PENDIENTE_SRI', 'Pendiente en SRI'
+    AUTORIZADA = 'AUTORIZADA', 'Autorizada'
+    DEVUELTA = 'DEVUELTA', 'Devuelta'
+    RECHAZADA = 'RECHAZADA', 'Rechazada'
+    ERROR = 'ERROR', 'Error'

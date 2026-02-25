@@ -47,6 +47,9 @@ class FacturaSerializer(serializers.ModelSerializer):
     consumo_m3 = serializers.SerializerMethodField()
     medidor_codigo = serializers.SerializerMethodField()
     multas = serializers.SerializerMethodField()
+
+    # --- ESTADOS DUALES (Retrocompatibilidad Frontend) ---
+    estado = serializers.ReadOnlyField(source='estado_financiero')
     
     class Meta:
         model = FacturaModel

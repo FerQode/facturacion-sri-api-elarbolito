@@ -99,7 +99,7 @@ class FacturaViewSet(viewsets.ModelViewSet):
         
         # Filtro Central: Si no piden historial, ocultamos las pagadas/anuladas
         if not ver_historial:
-            qs = qs.exclude(estado__in=['PAGADA', 'ANULADA'])
+            qs = qs.exclude(estado_financiero__in=['PAGADA', 'ANULADA'])
 
         # 🔎 FILTRO POR IDENTIFICACIÓN / NOMBRE / APELLIDO
         identificacion = request.GET.get('identificacion')

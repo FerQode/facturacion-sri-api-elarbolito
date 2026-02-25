@@ -208,7 +208,7 @@ class FacturacionService:
                         subtotal=item.get('subtotal', 0),
                         total=item.get('subtotal', 0),
                         impuestos=0.0,
-                        estado='PENDIENTE',
+                        estado_financiero='PENDIENTE',
                         fecha_emision=ahora.date(),
                         fecha_registro=ahora,
                         fecha_vencimiento=vencimiento.date(),
@@ -217,7 +217,7 @@ class FacturacionService:
                         sri_ambiente=1,
                         sri_tipo_emision=1,
                         clave_acceso_sri=f"TEMP-{uuid.uuid4().hex[:10]}", # Temporal, luego se firma
-                        estado_sri='PENDIENTE'
+                        estado_sri='NO_ENVIADA'
                     )
 
                     # Marcar lectura como facturada para no duplicar cobros

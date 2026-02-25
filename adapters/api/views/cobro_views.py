@@ -47,6 +47,14 @@ class CobroViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'], url_path='registrar')
     @transaction.atomic # ✅ Transacción controlada en el Entry Point
     def registrar_cobro(self, request):
+        # TAREA 2: Idempotencia en el Endpoint (API Layer)
+        idempotency_key = request.headers.get('Idempotency-Key')
+        if idempotency_key:
+            from django.core.cache import cache
+            cached_response = cache.get(idempotency_key)
+            if cached_response:
+                return Response(cached_response, status=status.HTTP_200_OK)
+
         serializer = RegistrarCobroSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -71,6 +79,11 @@ class CobroViewSet(viewsets.ViewSet):
                 factura_id=serializer.validated_data['factura_id'],
                 lista_pagos=serializer.validated_data['pagos']
             )
+            
+            # Guardamos la respuesta si hubo un Idempotency-Key
+            if idempotency_key:
+                cache.set(idempotency_key, resultado, timeout=86400) # 24 horas
+                
             return Response(resultado, status=status.HTTP_200_OK)
 
         except (EntityNotFoundException, BusinessRuleException) as e:

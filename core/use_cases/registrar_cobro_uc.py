@@ -217,9 +217,14 @@ class RegistrarCobroUseCase:
                     xml_autorizado=respuesta.xml_respuesta
                 )
             else:
-                factura.estado_sri = respuesta.estado
+                # PASO 1 - MODELO DE ESTADOS: ID 70 -> PENDIENTE_SRI
+                is_processing = respuesta.mensaje_error and ("ID:70" in respuesta.mensaje_error or "EN PROCESAMIENTO" in respuesta.mensaje_error.upper())
+                
+                estado_asignar = "PENDIENTE_SRI" if is_processing else respuesta.estado
+                
+                factura.estado_sri = estado_asignar
                 factura.sri_mensaje_error = respuesta.mensaje_error
-                sri_resultado["estado"] = respuesta.estado
+                sri_resultado["estado"] = estado_asignar
                 sri_resultado["mensaje"] = respuesta.mensaje_error
 
             # Guardamos estado SRI final

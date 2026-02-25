@@ -456,21 +456,65 @@ class DjangoSRIService(ISRIService):
             )
 
     def consultar_autorizacion(self, clave_acceso: str) -> SRIResponse:
-        # Implementación simple de consulta
+        """
+        Consulta asíncrona de una clave de acceso al WSDL de Autorización.
+        Diseñada para uso primario desde Celery Workers.
+        """
+        logger.info(f"[CELERY] Consultando SRI Autorización para clave: {clave_acceso}")
         try:
-            response = self.soap_client_autorizacion.service.autorizacionComprobante(clave_acceso)
-            # Lógica similar de parseo... (simplificada por brevedad)
-            autorizaciones = response.autorizaciones
-            if autorizaciones and len(autorizaciones.autorizacion) > 0:
+            response = self.soap_client_autorizacion.service.autorizacionComprobante(claveAccesoComprobante=clave_acceso)
+            
+            autorizaciones = getattr(response, 'autorizaciones', None)
+            if autorizaciones and hasattr(autorizaciones, 'autorizacion') and len(autorizaciones.autorizacion) > 0:
+                # SRI puede devolver múltiples, comúnmente nos importa la primera
                 auth = autorizaciones.autorizacion[0]
+                
+                estado = getattr(auth, 'estado', 'DESCONOCIDO')
+                fecha_auth = getattr(auth, 'fechaAutorizacion', None)
+                comprobante_xml = getattr(auth, 'comprobante', None)
+                
+                # Extraer mensajes si fue rechazada
+                mensajes_str = ""
+                mensajes_obj = getattr(auth, 'mensajes', None)
+                if mensajes_obj and hasattr(mensajes_obj, 'mensaje'):
+                    mensajes_list = []
+                    for m in mensajes_obj.mensaje:
+                        texto = getattr(m, 'mensaje', '')
+                        info_ad = getattr(m, 'informacionAdicional', '')
+                        identificador = getattr(m, 'identificador', '')
+                        msg_item = f"[{identificador}] {texto}"
+                        if info_ad:
+                            msg_item += f" ({info_ad})"
+                        mensajes_list.append(msg_item)
+                    mensajes_str = " | ".join(mensajes_list)
+
+                # Serializar auth para logs/bd
+                try:
+                    auth_dict = serialize_object(auth)
+                except:
+                    auth_dict = {"raw": str(auth)}
+                
                 return SRIResponse(
-                    exito=(auth.estado == "AUTORIZADO"),
+                    exito=(estado == "AUTORIZADO"),
                     autorizacion_id=clave_acceso,
-                    estado=auth.estado,
-                    mensaje_error=None if auth.estado == "AUTORIZADO" else "No autorizado",
-                    xml_enviado=None,
-                    xml_respuesta=str(auth)
+                    estado=estado,
+                    mensaje_error=mensajes_str if estado != "AUTORIZADO" else None,
+                    xml_enviado=None, # Ya no lo tenemos a mano
+                    xml_respuesta=auth_dict,
+                    # Nativos para Celery
+                    fecha_autorizacion=fecha_auth,
+                    comprobante_autorizado=comprobante_xml
                 )
-            return SRIResponse(exito=False, autorizacion_id=clave_acceso, estado="NO_ENCONTRADO", mensaje_error="No existe", xml_enviado=None, xml_respuesta=None)
+            
+            return SRIResponse(
+                exito=False, autorizacion_id=clave_acceso, estado="NO_ENCONTRADO", 
+                mensaje_error="El comprobante no existe en los registros de autorización del SRI.", 
+                xml_enviado=None, xml_respuesta=None
+            )
+            
         except Exception as e:
-             return SRIResponse(exito=False, autorizacion_id=clave_acceso, estado="ERROR", mensaje_error=str(e), xml_enviado=None, xml_respuesta=None)
+             logger.error(f"[CELERY-ERROR] Falló la consulta al WSDL de autorización: {e}")
+             return SRIResponse(
+                 exito=False, autorizacion_id=clave_acceso, estado="ERROR_CONSULTA_WSDL", 
+                 mensaje_error=str(e), xml_enviado=None, xml_respuesta=None
+             )

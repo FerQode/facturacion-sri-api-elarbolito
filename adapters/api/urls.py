@@ -92,6 +92,7 @@ from adapters.api.views import (
     # Extras Integrados
     CobroLecturaViewSet
 )
+from adapters.api.views.sri_views import SincronizadorSRIView
 
 router = DefaultRouter()
 
@@ -137,6 +138,9 @@ urlpatterns = [
     # --- Endpoints Utilitarios ---
     path('users/profile/', UserProfileView.as_view(), name='user-profile'),
     path('facturas/<int:factura_id>/pdf/', DescargarRideView.as_view(), name='descargar-ride'),
+
+    # --- Orquestación Asíncrona (Celery) ---
+    path('sri/sincronizar/', SincronizadorSRIView.as_view(), name='sri-sincronizar'),
 
     # --- Billing System (Legacy / Específicos) ---
     path('billing/estado-cuenta/<int:socio_id>/', ConsultarEstadoCuentaView.as_view(), name='billing-estado-cuenta'),

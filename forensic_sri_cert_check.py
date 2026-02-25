@@ -36,7 +36,7 @@ def run_forensic():
         print(f"Detalle Técnico: {str(e)}")
         sys.exit(1)
 
-    cert_path = '/tmp/forensic_cert.p12'
+    cert_path = 'forensic_cert.p12'
     
     with open(cert_path, 'wb') as f:
         f.write(p12_bytes)

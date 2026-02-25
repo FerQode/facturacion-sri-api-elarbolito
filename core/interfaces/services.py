@@ -20,6 +20,8 @@ class SRIResponse:
     xml_enviado: Optional[str]
     xml_enviado: Optional[str]
     xml_respuesta: Optional[Dict[str, Any]]
+    fecha_autorizacion: Optional[str] = None
+    comprobante_autorizado: Optional[str] = None
 
 class ISRIService(ABC):
     @abstractmethod

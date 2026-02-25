@@ -1,2 +1,2 @@
 web: python manage.py migrate && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 120
-worker: celery -A config worker --loglevel=info
+worker: celery -A config worker -l info -Q sri_auth

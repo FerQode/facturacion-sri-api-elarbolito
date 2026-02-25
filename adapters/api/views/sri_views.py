@@ -1,50 +1,51 @@
 # adapters/api/views/sri_views.py
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework import status
+from drf_spectacular.utils import extend_schema
 
-# Use Cases
-from core.use_cases.sincronizar_sri_uc import SincronizarFacturaSRIUseCase
+from adapters.infrastructure.models import FacturaModel
+from adapters.api.tasks import consultar_autorizacion_sri_task
 
-# Repositories (Infrastructure)
-from adapters.infrastructure.repositories.django_factura_repository import DjangoFacturaRepository
-
-# Services (Infrastructure)
-from adapters.infrastructure.services.django_sri_service import DjangoSRIService
-from adapters.infrastructure.services.django_email_service import DjangoEmailService # Asumimos que existe por contexto
-
-class SRIViewSet(viewsets.ViewSet):
+class SincronizadorSRIView(APIView):
     """
-    ViewSet para acciones directas relacionadas con el SRI.
-    Separado de Cobros y Facturas para mantener SRP.
+    Endpoint de Orquestación DevOps para el SRI.
+    Dispara la sincronización asíncrona (Celery) de todas las facturas 
+    que quedaron atrapadas en estado PENDIENTE_SRI (ID:70 EN PROCESAMIENTO).
     """
+    # Protegido idealmente con IsAdminUser, pero dejamos IsAuthenticated para Pruebas.
+    # En producción enterprise se requiere rol administrador.
+    permission_classes = [IsAuthenticated]
 
-    @action(detail=True, methods=['post'], url_path='sincronizar')
-    def sincronizar(self, request, pk=None):
-        """
-        POST /api/v1/sri/{pk}/sincronizar/
-        Reintenta o consulta el estado de una factura en el SRI.
-        Útil para errores 'CLAVE DE ACCESO EN PROCESAMIENTO' o 'DEVUELTA'.
-        """
-        try:
-            # Composición de Dependencias (Manual DI)
-            # En un proyecto más grande usaríamos un Container (Dependency Injector)
-            factura_repo = DjangoFacturaRepository()
-            sri_service = DjangoSRIService() 
-            email_service = DjangoEmailService() # Instancia por defecto
+    @extend_schema(
+        summary="Sincronizar Facturas Pendientes (ID:70)",
+        description="Encola tareas en Celery para consultar el WSDL de Autorización del SRI sobre facturas PENDIENTE_SRI.",
+        responses={202: None}
+    )
+    def post(self, request, *args, **kwargs):
+        # Buscar facturas candidatas (tienen clave de acceso pero no están aprobadas firmemente)
+        # Optimizamos a solo enviar a Celery las que mapeamos explícitamente a PENDIENTE_SRI.
+        facturas_pendientes = FacturaModel.objects.filter(
+            estado_sri__in=["PENDIENTE_SRI", "TIMEOUT_FIRMA"],
+            clave_acceso_sri__isnull=False
+        )
 
-            use_case = SincronizarFacturaSRIUseCase(
-                factura_repo=factura_repo,
-                sri_service=sri_service,
-                email_service=email_service
-            )
+        total_encoladas = 0
+        jobs = []
 
-            resultado = use_case.ejecutar(factura_id=int(pk))
-            
-            return Response(resultado, status=status.HTTP_200_OK)
+        # Disparar Fan-Out de tareas a Celery (Cola: sri_auth)
+        for factura in facturas_pendientes:
+            # .delay() encola el mensaje en Redis instantáneamente
+            task = consultar_autorizacion_sri_task.delay(factura.id)
+            jobs.append({"factura_id": factura.id, "job_id": task.id})
+            total_encoladas += 1
 
-        except Exception as e:
-            return Response(
-                {"error": str(e)}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        return Response(
+            {
+                "mensaje": "Proceso de sincronización iniciado en segundo plano.",
+                "total_facturas_encoladas": total_encoladas,
+                "jobs": jobs
+            },
+            status=status.HTTP_202_ACCEPTED
+        )

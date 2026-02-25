@@ -121,7 +121,7 @@ class RegistrarCobroUseCase:
             },
             "factura": {
                 "id": factura.id,
-                "estado": factura.estado, # Debe ser "PAGADA"
+                "estado": factura.estado.value if hasattr(factura.estado, 'value') else factura.estado, # Debe ser string
                 "estado_sri": factura.estado_sri or "PENDIENTE_FIRMA", # Nunca devolver None/undefined
                 "mensaje_error_sri": factura.sri_mensaje_error or mensaje
             },

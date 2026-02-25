@@ -80,7 +80,8 @@ class FacturacionService:
         datos_pendientes = []
 
         try:
-            lecturas = LecturaModel.objects.select_related('medidor', 'medidor__terreno', 'medidor__terreno__socio').all()
+            # Solo buscamos lecturas que AÚN NO hayan sido facturadas
+            lecturas = LecturaModel.objects.filter(esta_facturada=False).select_related('medidor', 'medidor__terreno', 'medidor__terreno__socio').all()
         except Exception:
             return []
 
@@ -169,31 +170,38 @@ class FacturacionService:
             for item in lista_facturas:
                 id_lectura_db = item.get('lectura_real_id')
 
-                # Crear la Factura cabecera
-                FacturaModel.objects.create(
-                    socio_id=item.get('socio_id'),
-                    lectura_id=id_lectura_db, # ID numérico (o None para tarifa fija)
-                    medidor_id=item.get('medidor_id'),
-                    subtotal=item.get('subtotal', 0),
-                    total=item.get('subtotal', 0),
-                    impuestos=0.0,
-                    estado='PENDIENTE',
-                    fecha_emision=ahora.date(),
-                    fecha_registro=ahora,
-                    fecha_vencimiento=vencimiento.date(),
-                    anio=ahora.year,
-                    mes=ahora.month,
-                    sri_ambiente=1,
-                    sri_tipo_emision=1,
-                    clave_acceso_sri=f"TEMP-{uuid.uuid4().hex[:10]}", # Temporal, luego se firma
-                    estado_sri='PENDIENTE'
-                )
+                from django.db import IntegrityError
 
-                # Marcar lectura como facturada para no duplicar cobros
-                if id_lectura_db:
-                    LecturaModel.objects.filter(id=id_lectura_db).update(esta_facturada=True)
+                try:
+                    # Crear la Factura cabecera
+                    FacturaModel.objects.create(
+                        socio_id=item.get('socio_id'),
+                        lectura_id=id_lectura_db, # ID numérico (o None para tarifa fija)
+                        medidor_id=item.get('medidor_id'),
+                        subtotal=item.get('subtotal', 0),
+                        total=item.get('subtotal', 0),
+                        impuestos=0.0,
+                        estado='PENDIENTE',
+                        fecha_emision=ahora.date(),
+                        fecha_registro=ahora,
+                        fecha_vencimiento=vencimiento.date(),
+                        anio=ahora.year,
+                        mes=ahora.month,
+                        sri_ambiente=1,
+                        sri_tipo_emision=1,
+                        clave_acceso_sri=f"TEMP-{uuid.uuid4().hex[:10]}", # Temporal, luego se firma
+                        estado_sri='PENDIENTE'
+                    )
 
-                facturas_creadas += 1
+                    # Marcar lectura como facturada para no duplicar cobros
+                    if id_lectura_db:
+                        LecturaModel.objects.filter(id=id_lectura_db).update(esta_facturada=True)
+
+                    facturas_creadas += 1
+
+                except IntegrityError:
+                    # Si la factura ya existe (Duplicado de lectura_id), la ignoramos y pasamos a la siguiente
+                    continue
 
         return {
             "estado": "COMPLETADA",

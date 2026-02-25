@@ -2,6 +2,8 @@
 from decimal import Decimal
 from typing import List, Dict, Tuple
 from datetime import datetime
+import hashlib
+from django.core.cache import cache
 
 # Interfaces (Puertos)
 from core.interfaces.repositories import IFacturaRepository, IPagoRepository
@@ -38,19 +40,25 @@ class RegistrarCobroUseCase:
             raise EntityNotFoundException(f"La factura {factura_id} no existe.")
 
         # 2. Validaciones de Dominio Puras
-        # 2. Validaciones de Dominio Puras (Idempotencia)
+        # 2. Validaciones de Dominio Puras & Idempotencia Real (EJE 3)
+        # Derivar llave de idempotencia: factura_id + sumatoria_montos + "caja"
+        monto_total_req = sum(Decimal(str(p['monto'])) for p in lista_pagos)
+        raw_key = f"cobro_{factura_id}_{monto_total_req}_caja"
+        idempotency_key = hashlib.sha256(raw_key.encode('utf-8')).hexdigest()
+
+        # Revisar si ya procesamos esta misma petición exacta recientemente
+        cached_response = cache.get(idempotency_key)
+        if cached_response:
+            return cached_response
+
+        # Si ya estaba pagada por vía regular (otro monto u otro cajero) pero no hay caché:
         if factura.estado == EstadoFactura.PAGADA.value:
-            # Idempotencia: Si ya está pagada (tal vez el frontend reintentó un doble click)
-            # no levantamos error 400 que rompa, sino que devolvemos el estado actual para que consulte el PDF.
             if factura.estado_sri == "AUTORIZADO":
-                 return {
-                    "mensaje": "La factura ya se encontraba pagada y autorizada exitosamente. No se ha duplicado el cobro.",
-                    "factura_id": factura.id,
-                    "nuevo_estado": "PAGADA",
-                    "sri": {"estado": "AUTORIZADO", "mensaje": "Factura previamente autorizada."}
-                 }
+                 return self._build_api_contract_response("OK", "Factura previamente autorizada.", factura, total_abonado=factura.total)
+            elif factura.estado_sri == "ERROR_FIRMA":
+                 return self._build_api_contract_response("SRI_ERROR", "Factura pagada, pero firma SRI falló previamente.", factura, total_abonado=factura.total)
             else:
-                 raise BusinessRuleException(f"La factura ya está cobrada en caja pero el SRI falló previamente (Estado: {factura.estado_sri}). Por favor reintente la firma desde el panel SRI.")
+                 return self._build_api_contract_response("SRI_PENDIENTE", "Factura pagada, SRI pendiente.", factura, total_abonado=factura.total)
         
         # (Asumimos que la validación de ANULADA se maneja igual si existiera el estado)
 
@@ -92,16 +100,32 @@ class RegistrarCobroUseCase:
         # 7. Orquestación SRI + Email
         resultado_sri = self._procesar_sri_y_notificar(factura)
 
-        # 8. Construcción de respuesta (Podría ser un DTO, pero mantenemos compatibilidad Dict)
+        # 8. Construcción de respuesta estricta según contrato de UI (EJE 2)
+        sri_status_mapped = "OK" if sri_resultado.get("estado") == "AUTORIZADO" else ("SRI_ERROR" if sri_resultado.get("estado") == "ERROR_FIRMA" else "SRI_PENDIENTE")
+        
+        final_response = self._build_api_contract_response(sri_status_mapped, sri_resultado.get("mensaje", ""), factura, total_acumulado)
+        
+        # Guardar idempotencia en Redis/Cache por 24 horas
+        cache.set(idempotency_key, final_response, timeout=86400)
+        
+        return final_response
+
+    def _build_api_contract_response(self, status: str, mensaje: str, factura: Factura, total_abonado: Decimal) -> Dict:
+        """Construye el contrato estricto de UI asegurando que no haya undefined"""
         return {
-            "mensaje": "Cobro registrado correctamente.",
-            "factura_id": factura.id,
-            "nuevo_estado": "PAGADA",
-            "sri": resultado_sri,
-            # El comprobante completo se podría construir aquí o solicitar aparte
-            "comprobante_preview": {
-                "total": factura.total,
-                "pagado": total_acumulado
+            "status": status,
+            "pago": {
+                "total_abonado": float(total_abonado),
+                "mensaje": "Cobro registrado exitosamente." if status in ["OK", "SRI_PENDIENTE"] else "Cobro registrado con advertencias SRI."
+            },
+            "factura": {
+                "id": factura.id,
+                "estado": factura.estado, # Debe ser "PAGADA"
+                "estado_sri": factura.estado_sri or "PENDIENTE_FIRMA", # Nunca devolver None/undefined
+                "mensaje_error_sri": factura.sri_mensaje_error or mensaje
+            },
+            "ride": {
+                "pdf_url": f"/api/v1/facturas-gestion/{factura.id}/ride/" if status == "OK" else None
             }
         }
 
@@ -201,10 +225,20 @@ class RegistrarCobroUseCase:
             self.factura_repo.guardar(factura)
 
         except Exception as e:
-            sri_resultado["estado"] = "ERROR_FIRMA"
-            sri_resultado["mensaje"] = f"Fallo proceso SRI: {str(e)}"
-            factura.estado_sri = "ERROR_FIRMA"
-            factura.sri_mensaje_error = str(e)
+            error_msg = str(e)
+            
+            # Mapeo de errores dictado por auditoría DevOps
+            if "TIMEOUT_FIRMA" in error_msg:
+                mapped_state = "TIMEOUT_FIRMA"
+            elif "ERROR_CERTIFICADO" in error_msg:
+                mapped_state = "ERROR_CERTIFICADO"
+            else:
+                mapped_state = "ERROR_FIRMA"
+                
+            sri_resultado["estado"] = mapped_state
+            sri_resultado["mensaje"] = f"Fallo proceso SRI: {error_msg}"
+            factura.estado_sri = mapped_state
+            factura.sri_mensaje_error = error_msg
             self.factura_repo.guardar(factura)
         
         return sri_resultado

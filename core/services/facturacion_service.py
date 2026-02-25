@@ -85,6 +85,11 @@ class FacturacionService:
             return []
 
         for lectura in lecturas:
+            # DEFENSIVO: Si el medidor no tiene terreno asignado (está en bodega o retirado) 
+            # o el terreno no tiene socio, saltamos esta lectura para no crashear.
+            if not lectura.medidor or not lectura.medidor.terreno or not lectura.medidor.terreno.socio:
+                continue
+
             # Los campos reales en LecturaModel son `valor` y `lectura_anterior`
             actual = lectura.valor or 0
             anterior = lectura.lectura_anterior or 0

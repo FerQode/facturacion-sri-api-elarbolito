@@ -77,7 +77,14 @@ class CobroViewSet(viewsets.ViewSet):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             # Log de error crítico
-            return Response({"error": "Error interno", "detalle": str(e)}, status=500)
+            import traceback
+            tb = traceback.format_exc()
+            print(f"❌ ERROR CRÍTICO EN COBROS:\n{tb}")
+            return Response({
+                "error": "Error interno procesando el cobro", 
+                "detalle": str(e),
+                "traceback": tb # Temporal para debug frontend
+            }, status=500)
 
     # --------------------------------------------------------------------------
     # 2. SOCIO SUBE COMPROBANTE (Móvil)

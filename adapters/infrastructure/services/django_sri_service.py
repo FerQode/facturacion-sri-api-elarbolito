@@ -251,60 +251,31 @@ class DjangoSRIService(ISRIService):
             # Generar identificador único para concurrencia
             req_id = uuid.uuid4().hex[:8]
             
-            # 1. Resolver el archivo P12
-            p12_path_to_use = self.auth.firma_path
+            # 1. Resolver el archivo P12 Físico (Cero Base64)
+            p12_path_to_use = os.environ.get("SRI_FIRMA_PATH", "/app/certs/sri_cert.p12")
+            if self.auth.firma_path and os.path.exists(self.auth.firma_path):
+                p12_path_to_use = self.auth.firma_path # Override para .env local
             
-            # Prioridad: Base64 (Nube/Railway)
-            base64_firma = getattr(settings, 'SRI_FIRMA_BASE64', None)
-            
-            if base64_firma:
-                logger.info("🔑 Usando Firma Electrónica desde variable de entorno (Base64)")
-                # 1. Limpieza agresiva del Base64 (Auditoría DevOps)
-                base64_limpia = base64_firma.strip().replace('"', '').replace('\r', '').replace('\n', '').replace(' ', '')
+            if not os.path.exists(p12_path_to_use):
+                logger.error(f"FATAL: Archivo P12 no encontrado. Se requiere montaje físico en: {p12_path_to_use}")
+                raise FileNotFoundError(f"El Certificado P12 no existe físicamente en el servidor: {p12_path_to_use}")
                 
-                # Reparación de Padding
-                missing_padding = len(base64_limpia) % 4
-                if missing_padding:
-                    base64_limpia += '=' * (4 - missing_padding)
-                    
-                # Decodificación estricta
-                try:
-                    p12_bytes = base64.b64decode(base64_limpia, validate=True)
-                    if len(p12_bytes) < 1024:
-                        raise ValueError("El certificado P12 decodificado es sospechosamente pequeño (< 1KB).")
-                except Exception as e:
-                    logger.error(f"Error decodificando Base64 del P12: {e}")
-                    raise ValueError(f"ERROR_CERTIFICADO: Error en variable SRI_FIRMA_BASE64 (basura o corrupta): {str(e)}")
+            p12_size = os.path.getsize(p12_path_to_use)
+            if p12_size < 1000:
+                raise ValueError(f"ERROR_CERTIFICADO: El archivo P12 físico en {p12_path_to_use} está corrupto o vacío (tamaño: {p12_size} bytes).")
 
-                # 2. Escritura Binaria y Vaciado a Disco (Crítico)
-                p12_path_to_use = os.path.join('/tmp', f"sri_p12_{req_id}.p12")
-                with open(p12_path_to_use, "wb") as f:
-                    f.write(p12_bytes)
-                    f.flush()
-                    os.fsync(f.fileno()) # Forzar al OS a escribir en disco físico de Railway
-
-            if not p12_path_to_use or not os.path.exists(p12_path_to_use):
-                raise FileNotFoundError(f"No se encontró archivo de firma física ni Base64 valido. Ruta intentada: {p12_path_to_use}")
-
-            # Escribimos también el XML de entrada con fsync garantizado
-            temp_input_path = os.path.join('/tmp', f"sri_xml_{req_id}.xml")
-            xml_bytes = xml_string.encode('utf-8')
-            with open(temp_input_path, "wb") as f_xml:
-                f_xml.write(xml_bytes)
-                f_xml.flush()
-                os.fsync(f_xml.fileno())
-
-            # 3. Auditoría Forense en los Logs
+            # 2. Auditoría Forense Inicial del P12 Físico
             import hashlib
-            import binascii
-            sha256_hash = hashlib.sha256(p12_bytes).hexdigest() if base64_firma else "LOCAL_FILE"
-            hex_prefix = binascii.hexlify(p12_bytes[:16]).decode('ascii') if base64_firma else "UNKNOWN"
-            size_disk = os.path.getsize(p12_path_to_use)
-            logger.info("=== AUDITORÍA FORENSE P12 ===")
-            logger.info(f"SHA-256: {sha256_hash}")
-            logger.info(f"Prefijo Hex (Primeros 16): {hex_prefix} (Debe ser PKCS12 válido, ej. 3082...)")
-            logger.info(f"Tamaño real en disco: {size_disk} bytes")
-            logger.info("=============================")
+            with open(p12_path_to_use, "rb") as f_cert:
+                sha_p12 = hashlib.sha256(f_cert.read()).hexdigest()
+            logger.info(f"[SRI CERT SHA256] {sha_p12} (Tamaño: {p12_size} bytes, Ruta: {p12_path_to_use})")
+
+            # 3. Crear archivo temporal para el XML sin firma (y cerrarlo a bajo nivel)
+            xml_bytes = xml_string.encode('utf-8')
+            logger.info(f"Generando XML temporal para firma. Tamaño: {len(xml_bytes)} bytes.")
+            fd_xml, temp_input_path = tempfile.mkstemp(prefix=f"sri_xml_{req_id}_", suffix='.xml', dir='/tmp')
+            os.write(fd_xml, xml_bytes)
+            os.close(fd_xml) # CRÍTICO: Flush garantizado al SO
 
             # El JAR guarda el output en la misma carpeta que el input
             nombre_xml_salida = f"{clave_acceso}_signed.xml"

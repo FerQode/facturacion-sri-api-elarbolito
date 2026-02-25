@@ -6,6 +6,12 @@
 # 1. Base Image: Python 3.12 Slim (Pequeña y Segura)
 FROM python:3.12-slim
 
+# === INSTALAR JAVA 8 (Copiando desde imagen oficial Temurin) ===
+COPY --from=eclipse-temurin:8-jre /opt/java/openjdk /opt/java/openjdk
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+# ==============================================================
+
 # 2. Variables de Entorno para optimización
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -31,7 +37,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu \
     fonts-liberation \
     fontconfig \
-    default-jre-headless \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -53,9 +58,10 @@ RUN DJANGO_SECRET_KEY=build-mode-only \
 # 7. Crear usuario no-root por seguridad
 RUN addgroup --system appgroup && adduser --system --group appuser
 
-# 8. Asignar permisos a carpetas críticas
-RUN mkdir -p /app/staticfiles /app/media && \
-    chown -R appuser:appgroup /app/
+# 8. Asignar permisos a carpetas críticas y copiar Certificado
+RUN mkdir -p /app/staticfiles /app/media /app/certs
+COPY secrets/firma_sri_corregida.p12 /app/certs/sri_cert.p12
+RUN chown -R appuser:appgroup /app/
 
 # 9. Copiar y dar permisos al Entrypoint
 COPY docker-entrypoint.sh /app/

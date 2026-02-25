@@ -68,7 +68,8 @@ class FacturaViewSet(viewsets.ModelViewSet):
         service = FacturacionService()
         
         try:
-            resultado = service.ejecutar_emision_masiva()
+            lista_facturas = request.data
+            resultado = service.ejecutar_emision_masiva(lista_facturas)
             return Response({
                 "mensaje": "Emisión masiva completada con éxito.",
                 "facturas_generadas": resultado.get('cantidad', 0)
@@ -84,16 +85,59 @@ class FacturaViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='pendientes')
     def pendientes(self, request):
         """
-        Retorna las facturas que NO están pagadas.
+        Retorna las facturas que NO están pagadas, con soporte de filtros.
         """
+        from django.db.models import Q
         qs = self.get_queryset().exclude(estado='PAGADA')
 
+        # 🔎 FILTRO POR IDENTIFICACIÓN / NOMBRE / APELLIDO
+        identificacion = request.GET.get('identificacion')
+        if identificacion:
+            qs = qs.filter(
+                Q(socio__identificacion__icontains=identificacion) |
+                Q(socio__nombres__icontains=identificacion) |
+                Q(socio__apellidos__icontains=identificacion)
+            )
+
+        # 📅 FILTRO POR FECHA
+        dia = request.GET.get('dia')
+        mes = request.GET.get('mes')
+        anio = request.GET.get('anio')
+        
+        if dia:
+            qs = qs.filter(fecha_emision__day=dia)
+        if mes:
+            qs = qs.filter(fecha_emision__month=mes)
+        if anio:
+            qs = qs.filter(fecha_emision__year=anio)
+
         ver_historial = request.query_params.get('ver_historial') == 'true'
-        if not ver_historial:
+        if not ver_historial and not (dia or mes or anio or identificacion):
+            # Por defecto, si no hay filtros explícitos, mostramos los del año actual
             qs = qs.filter(anio=timezone.now().year)
 
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # --- 3. ESTADO DE CUENTA POR SOCIO (GET) ---
+    @action(detail=False, methods=['get'], url_path='estado-cuenta/(?P<identificacion>[^/.]+)')
+    def estado_cuenta(self, request, identificacion=None):
+        """
+        Retorna la deuda completa (Estado de Cuenta) de un socio específico.
+        """
+        try:
+            facturas = FacturaModel.objects.filter(
+                socio__identificacion=identificacion
+            ).exclude(estado='PAGADA').order_by('fecha_emision')
+
+            if not facturas.exists():
+                return Response([], status=status.HTTP_200_OK)
+
+            serializer = self.get_serializer(facturas, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @extend_schema_view(

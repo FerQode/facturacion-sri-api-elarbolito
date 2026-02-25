@@ -75,9 +75,13 @@ class FacturaViewSet(viewsets.ModelViewSet):
                 "facturas_generadas": resultado.get('cantidad', 0)
             }, status=status.HTTP_201_CREATED)
         except Exception as e:
+            import traceback
+            traceback_str = traceback.format_exc()
+            print(f"❌ ERROR CRÍTICO EN EMISIÓN MASIVA:\n{traceback_str}")
             return Response({
                 "error": "Ocurrió un error al procesar la emisión masiva.",
-                "detalle": str(e)
+                "detalle": str(e),
+                "traceback": traceback_str # Temporalmente expuesto para el Frontend
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

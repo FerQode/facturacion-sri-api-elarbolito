@@ -56,6 +56,30 @@ class FacturaViewSet(viewsets.ModelViewSet):
         
         return Response(datos_pendientes, status=status.HTTP_200_OK)
 
+    # --- 1.5 Emisión Masiva (POST) ---
+    @action(detail=False, methods=['post'], url_path='emision-masiva')
+    def emision_masiva(self, request):
+        """
+        Endpoint que recibe la orden del Frontend para generar las facturas reales en la Base de Datos.
+        """
+        from core.services.facturacion_service import FacturacionService
+        
+        # Le delegamos a la capa Core la responsabilidad de guardar (Transacciones DB)
+        service = FacturacionService()
+        
+        try:
+            resultado = service.ejecutar_emision_masiva()
+            return Response({
+                "mensaje": "Emisión masiva completada con éxito.",
+                "facturas_generadas": resultado.get('cantidad', 0)
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({
+                "error": "Ocurrió un error al procesar la emisión masiva.",
+                "detalle": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
     # --- 2. Pendientes ---
     @action(detail=False, methods=['get'], url_path='pendientes')
     def pendientes(self, request):

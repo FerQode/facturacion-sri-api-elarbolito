@@ -116,3 +116,18 @@ class FacturacionService:
             datos_pendientes.append(item)
 
         return datos_pendientes
+
+    @staticmethod
+    def ejecutar_emision_masiva() -> Dict:
+        """
+        [EN CONSTRUCCIÓN]
+        Toma los datos pendientes calculados en `calcular_pre_emision_masiva`,
+        crea los registros en `FacturaModel` y `DetalleFacturaModel`,
+        y prepara todo para enviar al SRI posteriormente.
+        """
+        # Aquí irá toda la lógica de validación transaccional e iteración sobre `FacturaModel.objects.bulk_create`
+        # Por ahora devolvemos un éxito simulado para desbloquear la UI del Frontend.
+        return {
+            "estado": "COMPLETADA",
+            "cantidad": 0 # Número de facturas que fueron generadas (Ej: 140)
+        }

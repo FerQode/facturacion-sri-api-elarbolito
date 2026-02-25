@@ -43,9 +43,35 @@ class FacturaSerializer(serializers.ModelSerializer):
     socio_nombre = serializers.ReadOnlyField(source='socio.nombres')
     socio_apellido = serializers.ReadOnlyField(source='socio.apellidos')
     
+    # Manejo seguro para frontend (Evita nulls o undefined)
+    consumo_m3 = serializers.SerializerMethodField()
+    medidor_codigo = serializers.SerializerMethodField()
+    multas = serializers.SerializerMethodField()
+    
     class Meta:
         model = FacturaModel
         fields = '__all__'
+
+    def get_consumo_m3(self, obj):
+        if obj.lectura and obj.lectura.consumo_del_mes is not None:
+            return float(obj.lectura.consumo_del_mes)
+        return 0.0
+
+    def get_medidor_codigo(self, obj):
+        if obj.medidor and obj.medidor.codigo:
+            return obj.medidor.codigo
+        return "N/A"
+
+    def get_multas(self, obj):
+        try:
+            # Sumar subtotales de los detalles que sean "Multa" (ignorando mayúsculas)
+            total_multas = sum(
+                float(detalle.subtotal) for detalle in obj.detalles.all()
+                if detalle.rubro and 'multa' in detalle.rubro.nombre.lower()
+            )
+            return round(total_multas, 2)
+        except Exception:
+            return 0.0
 
 # --- 4. Pagos (Maestro-Detalle) ---
 class DetallePagoSerializer(serializers.ModelSerializer):
